@@ -1,76 +1,164 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { Permission, PermissionAction, User, UserRole } from './auth.types';
 
-export type UserRole = 'admin' | 'caixa' | 'garcom' | 'funcionario';
-export type PermissionAction = 'view' | 'create' | 'edit' | 'delete' | 'approve';
-
-export interface Permission {
-  module: string;
-  actions: PermissionAction[];
-}
-
-export interface User {
-  id: string;
-  name: string;
-  username: string;
-  role: UserRole;
-  active: boolean;
-  shortCode?: string;
-  permissions: Permission[];
-  createdAt: Date;
-  lastLogin?: Date;
-}
+type UserRecord = User & { password: string };
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
-  private readonly users: (User & { password: string })[] = [
+  private readonly users: UserRecord[] = [
     {
       id: '1',
       name: 'Administrador',
       username: 'admin',
-      password: '$2b$10$sx0SJ2q6CDoUnQNe2j7Jq.LzYZc/2D69Dwn4fk4RnoJ54QJTstmDi', // 'admin123'
+      email: 'admin@churrascaria.com',
+      password: '$2b$10$IE56Oa/KqcZCtDGcnw2huu.2zmQ5nVoVHWUYnMmw6yMNMA5X8yqLy', // 'admin123'
       role: 'admin',
       active: true,
       shortCode: '001',
-      permissions: [
-        { module: 'dashboard', actions: ['view', 'create', 'edit', 'delete', 'approve'] },
-        { module: 'comandas', actions: ['view', 'create', 'edit', 'delete', 'approve'] },
-        { module: 'buffet', actions: ['view', 'create', 'edit', 'delete', 'approve'] },
-        { module: 'garcom', actions: ['view', 'create', 'edit', 'delete', 'approve'] },
-        { module: 'caixa', actions: ['view', 'create', 'edit', 'delete', 'approve'] },
-        { module: 'porteiro', actions: ['view', 'create', 'edit', 'delete', 'approve'] },
-        { module: 'estoque', actions: ['view', 'create', 'edit', 'delete', 'approve'] },
-        { module: 'relatorios', actions: ['view', 'create', 'edit', 'delete', 'approve'] },
-        { module: 'cancelamentos', actions: ['view', 'create', 'edit', 'delete', 'approve'] },
-        { module: 'admin', actions: ['view', 'create', 'edit', 'delete', 'approve'] },
-      ],
+      permissions: this.getDefaultPermissions('admin'),
       createdAt: new Date(),
     },
     {
       id: '2',
       name: 'Maria Caixa',
       username: 'caixa',
-      password: '$2b$10$RK97bZASpKNmA3rcXQDKYOrdYV/E3KTTF0U/AdjfK9gYmnzJrW7p2', // 'caixa123'
+      email: 'caixa@churrascaria.com',
+      password: '$2b$10$u1ux.ccHo6XGC9jvSqqj5.l6uORXPlurSscX9E7qobsnw55Gbt.bC', // 'caixa123'
       role: 'caixa',
       active: true,
       shortCode: '002',
-      permissions: [
-        { module: 'dashboard', actions: ['view'] },
-        { module: 'comandas', actions: ['view'] },
-        { module: 'caixa', actions: ['view', 'create', 'edit'] },
-      ],
+      permissions: this.getDefaultPermissions('caixa'),
       createdAt: new Date(),
     },
   ];
 
   constructor(private readonly jwtService: JwtService) {}
 
-  private stripPassword(user: User & { password: string }): User {
+  private stripPassword(user: UserRecord): User {
     const { password, ...rest } = user;
     return rest;
+  }
+
+  private assertUniqueFields(dto: { username?: string; email?: string; shortCode?: string }, ignoreId?: string) {
+    if (dto.username && this.users.some(u => u.username === dto.username && u.id !== ignoreId)) {
+      throw new BadRequestException('Username ja esta em uso');
+    }
+    if (dto.email && this.users.some(u => u.email === dto.email && u.id !== ignoreId)) {
+      throw new BadRequestException('Email ja esta em uso');
+    }
+    if (dto.shortCode && this.users.some(u => u.shortCode === dto.shortCode && u.id !== ignoreId)) {
+      throw new BadRequestException('Codigo curto ja esta em uso');
+    }
+  }
+
+  private getDefaultPermissions(role: UserRole): Permission[] {
+    const full: Permission[] = [
+      { module: 'dashboard', actions: ['view', 'create', 'edit', 'delete', 'approve'] },
+      { module: 'comandas', actions: ['view', 'create', 'edit', 'delete', 'approve'] },
+      { module: 'buffet', actions: ['view', 'create', 'edit', 'delete', 'approve'] },
+      { module: 'garcom', actions: ['view', 'create', 'edit', 'delete', 'approve'] },
+      { module: 'caixa', actions: ['view', 'create', 'edit', 'delete', 'approve'] },
+      { module: 'porteiro', actions: ['view', 'create', 'edit', 'delete', 'approve'] },
+      { module: 'estoque', actions: ['view', 'create', 'edit', 'delete', 'approve'] },
+      { module: 'relatorios', actions: ['view', 'create', 'edit', 'delete', 'approve'] },
+      { module: 'cancelamentos', actions: ['view', 'create', 'edit', 'delete', 'approve'] },
+      { module: 'admin', actions: ['view', 'create', 'edit', 'delete', 'approve'] },
+    ];
+
+    if (role === 'admin') return full;
+    if (role === 'caixa')
+      return [
+        { module: 'dashboard', actions: ['view'] },
+        { module: 'comandas', actions: ['view'] },
+        { module: 'caixa', actions: ['view', 'create', 'edit'] },
+        { module: 'relatorios', actions: ['view'] },
+      ];
+    if (role === 'garcom')
+      return [
+        { module: 'dashboard', actions: ['view'] },
+        { module: 'comandas', actions: ['view', 'create'] },
+        { module: 'garcom', actions: ['view', 'create'] },
+      ];
+    return [
+      { module: 'dashboard', actions: ['view'] },
+      { module: 'buffet', actions: ['view', 'create'] },
+      { module: 'porteiro', actions: ['view'] },
+      { module: 'estoque', actions: ['view', 'create'] },
+    ];
+  }
+
+  listUsers(): User[] {
+    return this.users.map(this.stripPassword);
+  }
+
+  getUserById(id: string): User {
+    const user = this.users.find(u => u.id === id);
+    if (!user) {
+      throw new NotFoundException('Usuario nao encontrado');
+    }
+    return this.stripPassword(user);
+  }
+
+  async createUser(dto: CreateUserDto): Promise<User> {
+    this.assertUniqueFields(dto);
+    const password = await bcrypt.hash(dto.password, 10);
+    const now = new Date();
+    const user: UserRecord = {
+      id: randomUUID(),
+      name: dto.name,
+      username: dto.username,
+      email: dto.email,
+      password,
+      role: dto.role,
+      active: dto.active ?? true,
+      shortCode: dto.shortCode,
+      permissions: this.getDefaultPermissions(dto.role),
+      createdAt: now,
+    };
+    this.users.push(user);
+    return this.stripPassword(user);
+  }
+
+  async updateUser(id: string, dto: UpdateUserDto): Promise<User> {
+    const user = this.users.find(u => u.id === id);
+    if (!user) {
+      throw new NotFoundException('Usuario nao encontrado');
+    }
+
+    this.assertUniqueFields(
+      { username: dto.username, email: dto.email, shortCode: dto.shortCode },
+      user.id,
+    );
+
+    if (dto.name !== undefined) user.name = dto.name;
+    if (dto.username !== undefined) user.username = dto.username;
+    if (dto.email !== undefined) user.email = dto.email;
+    if (dto.active !== undefined) user.active = dto.active;
+    if (dto.shortCode !== undefined) user.shortCode = dto.shortCode;
+    if (dto.role && dto.role !== user.role) {
+      user.role = dto.role;
+      user.permissions = this.getDefaultPermissions(dto.role);
+    }
+    if (dto.password) {
+      user.password = await bcrypt.hash(dto.password, 10);
+    }
+
+    return this.stripPassword(user);
+  }
+
+  deleteUser(id: string): void {
+    const idx = this.users.findIndex(u => u.id === id);
+    if (idx === -1) {
+      throw new NotFoundException('Usuario nao encontrado');
+    }
+    this.users.splice(idx, 1);
   }
 
   findById(id: string): User | undefined {

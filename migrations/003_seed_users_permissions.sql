@@ -15,7 +15,7 @@ WITH perms AS (
   RETURNING id, module
 ), admin_user AS (
   INSERT INTO users (name, username, password_hash, role, active, short_code)
-  VALUES ('Administrador', 'admin', '$2b$10$sx0SJ2q6CDoUnQNe2j7Jq.LzYZc/2D69Dwn4fk4RnoJ54QJTstmDi', 'admin', true, '001')
+  VALUES ('Administrador', 'admin', '$2b$10$IE56Oa/KqcZCtDGcnw2huu.2zmQ5nVoVHWUYnMmw6yMNMA5X8yqLy', 'admin', true, '001')
   RETURNING id
 ), link_admin AS (
   INSERT INTO user_permissions (user_id, permission_id)
@@ -33,7 +33,7 @@ WITH perms AS (
   RETURNING id, module
 ), caixa_user AS (
   INSERT INTO users (name, username, password_hash, role, active, short_code)
-  VALUES ('Maria Caixa', 'caixa', '$2b$10$RK97bZASpKNmA3rcXQDKYOrdYV/E3KTTF0U/AdjfK9gYmnzJrW7p2', 'caixa', true, '002')
+  VALUES ('Maria Caixa', 'caixa', '$2b$10$u1ux.ccHo6XGC9jvSqqj5.l6uORXPlurSscX9E7qobsnw55Gbt.bC', 'caixa', true, '002')
   RETURNING id
 ), link_caixa AS (
   INSERT INTO user_permissions (user_id, permission_id)

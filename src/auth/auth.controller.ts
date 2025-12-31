@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
   UseGuards,
   UnauthorizedException,
   createParamDecorator,
@@ -11,7 +12,7 @@ import {
   SetMetadata,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import type { PermissionAction, User } from './auth.service';
+import type { PermissionAction, User } from './auth.types';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { PermissionsGuard } from './permissions.guard';
@@ -44,6 +45,15 @@ export class AuthController {
     return this.authService.login(user);
   }
 
+  @Post('login/code')
+  async loginByCode(@Body('code') code: string) {
+    const user = await this.authService.validateUserByCode(code);
+    if (!user) {
+      throw new UnauthorizedException('Codigo invalido ou usuario inativo');
+    }
+    return this.authService.login(user);
+  }
+
   @Get('me')
   @UseGuards(JwtAuthGuard)
   me(@UserFromRequest() user: User) {
@@ -56,8 +66,9 @@ export class AuthController {
   checkPermission(
     @UserFromRequest() user: User,
     @Param('module') module: string,
+    @Query('action') action?: PermissionAction,
   ) {
-    // PermissionsGuard ja valida; aqui apenas devolvemos o status
-    return { module, allowed: this.authService.hasPermission(user, module) };
+    const actionCast = action as PermissionAction | undefined;
+    return { module, action: actionCast, allowed: this.authService.hasPermission(user, module, actionCast) };
   }
 }
